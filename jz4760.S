@@ -15,44 +15,76 @@ _b0004:
 	addi	t0,t0,1
 	mtlo	t0
 	li	at,11
-	bne	t0,at,_b002c
+	bne	t0,at,intc_mask_irqs
 	  nop
+
+rtc_poweroff:
+	/* Power OFF the SoC */
 	lui	t1,0xb000
 	ori	t1,t1,0x3020
 	li	t0,1
 	sw	t0,0(t1)
 
-_b002c:
+intc_mask_irqs:
+	/* Mask IRQs (write 0xffffffff to ICMSR0. ICMSR1 not written) */
 	lui	t1,0xb000
 	ori	t1,t1,0x1008
 	lui	t0,0xffff
 	ori	t0,t0,0xffff
 	sw	t0,0(t1)
+
+	/* $gp contains the cache address */
 	lui	gp,0x8000
+
+	/* $sp contains the base address for GPIO/pinctrl registers */
 	lui	sp,0xb001
+
+	/* $s8 contains the base address for NEMC registers */
 	lui	s8,0xb341
 	lui	t1,0xe
+
+	/* Disable pull-over registers on boot_sel[2,1,0] pins */
 	sw	t1,824(sp)
+
+	/* Read boot_sel[2,1,0] pins to s5 */
 	lw	t1,768(sp)
 	srl	t1,t1,0x11
 	andi	s5,t1,0x7
+
+	/* If boot_sel[2,1,0] == 3 -> NOR boot, SPI CS #4 */
 	li	t1,3
-	beq	s5,t1,_b12c
+	beq	s5,t1,spi0_boot_cs4
 	  nop
+
+	/*
+	 * Set KSEG0 cacheability:
+	 * cacheable, non-coherent, write-back, write-allocate
+	 */
 	li	v0,3
 	mtc0	v0,$16
 	nop
+
+	/*
+	 * Set CP0.ErrCtl.SPR bit to enable CACHE accesses to the optional
+	 * scratchpad RAMs. When this bit is set, Index Load Tag, Index Store Tag,
+	 * and Index Store Data CACHE instructions will send reads or writes to the
+	 * scratchpad RAM port. The effects of these operations are dependent on
+	 * the particular scratchpad implementation.
+	 */
 	lui	v0,0x2000
 	mtc0	v0,$26
+
 	ori	v0,gp,0x0
 	ori	v1,v0,0x3fe0
+
+	/* Clear CP0.Taglo register */
 	mtc0	zero,$28
 	.word	0x4080e001
 
-_b0090:
-	cache	0x8,0(v0)
-	cache	0x9,0(v0)
-	bne	v0,v1,_b0090
+l1_cache_prepare_loop:
+	cache	Index_Store_Tag_I,0(v0)
+	cache	Index_Store_Tag_D,0(v0)
+	bne	v0,v1,l1_cache_prepare_loop
 	  addiu	v0,v0,32
 	ori	v0,gp,0x0
 	ori	v1,v0,0x3fe0
@@ -63,21 +95,26 @@ _b00b0:
 	and	a1,v0,a0
 	ori	a1,a1,0x1
 	mtc0	a1,$28
-	cache	0x8,0(v0)
-	cache	0x9,0(v0)
+	cache	Index_Store_Tag_I,0(v0)
+	cache	Index_Store_Tag_D,0(v0)
 	bne	v0,v1,_b00b0
 	  addiu	v0,v0,32
 
+	/* If boot_sel[2,1,0] == 4 -> NAND boot, CS #1 */
 	li	t0,7
-	beq	s5,t0,_b0658
+	beq	s5,t0,nand_boot_cs1
 	  nop
+
+	/* If boot_sel[2,1,0] == 4 -> SD boot, MSC0 */
 	li	t0,4
-	beq	s5,t0,_b1ac8
+	beq	s5,t0,msc0_boot
 	  nop
+
+	/* If boot_sel[2,1,0] == 5 -> NOR boot, SPI CS #0 */
 	li	t0,5
-	beq	s5,t0,_b01e8
+	beq	s5,t0,spi0_boot_cs0
 	  nop
-	b	_b0efc
+	b	usb_boot
 	  nop
 
 _b00f8:
@@ -97,7 +134,7 @@ _b0104:
 	b	_b1240
 	  nop
 
-_b12c:
+spi0_boot_cs4:
 	lui	t1,0x40
 	sw	t1,20(sp)
 	lui	t1,0x843
@@ -116,7 +153,7 @@ _b12c:
 	beqz	t0,_b0194
 	  nop
 	li	t1,16
-	bne	t1,t0,_b0efc
+	bne	t1,t0,usb_boot
 	  nop
 	li	t2,0xffff
 	sw	t2,68(sp)
@@ -131,9 +168,12 @@ _b0194:
 	jr	t4
 	  nop
 
-_b01a4:
+ssi0_disable:
+	/* Enable pull-over resistors for ssi0-a (PA18->PA21) */
 	lui	t1,0x3c
 	sw	t1,56(sp)
+
+	/* Disable SSI0 (clear bit 15 of SSICR0) */
 	lhu	t1,4(k1)
 	li	t0,32767
 	and	t1,t1,t0
@@ -141,10 +181,11 @@ _b01a4:
 	jr	ra
 	  nop
 
-_b01c4:
+spi0_wait_rfifo_empty:
 	li	t0,0xffff
 
 _b01c8:
+	/* Wait for the SPI0 receive FIFO to be empty */
 	beqz	t0,_b01e0
 	  addi	t0,t0,-1
 	lw	t1,12(k1)
@@ -156,7 +197,7 @@ _b01e0:
 	jr	ra
 	  nop
 
-_b01e8:
+spi0_boot_cs0:
 	lui	k1,0xb004
 	ori	k1,k1,0x3000
 	lui	t1,0x2c
@@ -207,7 +248,7 @@ _b028c:
 	beqz	t1,_b028c
 	  nop
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	v1,0(k1)
 	li	t0,4
@@ -221,57 +262,57 @@ _b028c:
 	  nop
 
 _b02d0:
-	jal	_b01a4
+	jal	ssi0_disable
 	  nop
-	b	_b0efc
+	b	usb_boot
 	  nop
 
 _b02e0:
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t1,0(k1)
 
 _b02f0:
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t1,0(k1)
 
 _b0300:
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t1,0(k1)
 	li	t0,85
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t1,0(k1)
 	li	t0,170
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t1,0(k1)
 	li	t0,85
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t1,0(k1)
 	li	t0,170
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	_b01c4
+	jal	spi0_wait_rfifo_empty
 	  nop
 	lbu	t2,0(k1)
-	jal	_b01a4
+	jal	ssi0_disable
 	  nop
 	sb	t2,24(k1)
 	lhu	t1,4(k1)
@@ -339,7 +380,7 @@ _b0444:
 	  addi	t2,t2,-1
 	bnez	a3,_b0410
 	  addi	a3,a3,-1
-	jal	_b01a4
+	jal	ssi0_disable
 	  nop
 	li	s3,8192
 	b	_b00f8
@@ -465,7 +506,7 @@ _b0650:
 	jr	ra
 	  nop
 
-_b0658:
+nand_boot_cs1:
 	lui	t6,0xb34d
 	li	t1,255
 	sw	t1,68(sp)
@@ -494,7 +535,7 @@ _b0658:
 
 _b06bc:
 	addiu	t1,a1,-1280
-	bgtz	t1,_b0efc
+	bgtz	t1,usb_boot
 	  nop
 	li	t1,255
 	sb	t1,0(t9)
@@ -1128,19 +1169,27 @@ _b0eec:
 	b	_b00f8
 	  addiu	s4,gp,160
 
-_b0efc:
+usb_boot:
 	mflo	a0
+
+	/* If boot_sel[2,1,0] == 6 -> USB boot, EXCLK=12 MHz */
 	li	t0,6
-	beq	s5,t0,_b1120
+	beq	s5,t0,usb_boot_12mhz
 	  nop
+
+	/* If boot_sel[2,1,0] == 0 -> USB boot, EXCLK=13 MHz */
 	li	t0,0
-	beq	s5,t0,_b1150
+	beq	s5,t0,usb_boot_13mhz
 	  nop
+
+	/* If boot_sel[2,1,0] == 1 -> USB boot, EXCLK=26 MHz */
 	li	t0,1
-	beq	s5,t0,_b1194
+	beq	s5,t0,usb_boot_26mhz
 	  nop
+
+	/* If boot_sel[2,1,0] == 2 -> USB boot, EXCLK=19.2 MHz */
 	li	t0,2
-	beq	s5,t0,_b11d8
+	beq	s5,t0,usb_boot_19_2mhz
 	  nop
 	lui	t1,0xb000
 	ori	t1,t1,0x24
@@ -1263,16 +1312,16 @@ _b10d0:
 	mflo	v0
 	mflo	v0
 	li	at,12
-	beq	v0,at,_b1120
+	beq	v0,at,usb_boot_12mhz
 	  nop
 	li	at,13
-	beq	v0,at,_b1150
+	beq	v0,at,usb_boot_13mhz
 	  nop
 	li	at,19
-	beq	v0,at,_b11d8
+	beq	v0,at,usb_boot_19_2mhz
 	  nop
 	li	at,26
-	beq	v0,at,_b1194
+	beq	v0,at,usb_boot_26mhz
 	  nop
 
 _b1108:
@@ -1283,7 +1332,7 @@ _b1108:
 	and	t0,t0,at
 	sw	t0,0(t1)
 
-_b1120:
+usb_boot_12mhz:
 	li	v1,12
 	lui	t1,0xb000
 	lui	t0,0x121
@@ -1297,7 +1346,7 @@ _b1120:
 	b	_b1214
 	  nop
 
-_b1150:
+usb_boot_13mhz:
 	li	v1,13
 	lui	t1,0xb000
 	lui	t0,0x121
@@ -1316,7 +1365,7 @@ _b1150:
 	b	_b1214
 	  nop
 
-_b1194:
+usb_boot_26mhz:
 	li	v1,26
 	lui	t1,0xb000
 	lui	t0,0x121
@@ -1335,7 +1384,7 @@ _b1194:
 	b	_b1214
 	  nop
 
-_b11d8:
+usb_boot_19_2mhz:
 	li	v1,19
 	lui	t1,0xb000
 	lui	t0,0x121
@@ -1535,7 +1584,7 @@ _b1454:
 	  addi	t0,t1,-2
 	beqz	t0,_b14f0
 	  addi	t0,t1,-3
-	beqz	t0,_b1510
+	beqz	t0,l1_cache_invalidate
 	  addi	t0,t1,-4
 	beqz	t0,_b1548
 	  addi	t0,t1,-5
@@ -1571,13 +1620,13 @@ _b14f0:
 	b	_b1778
 	  nop
 
-_b1510:
+l1_cache_invalidate:
 	lui	t0,0x8000
 	addi	t1,t0,16352
 
 _b1518:
-	cache	0x0,0(t0)
-	cache	0x1,0(t0)
+	cache	Index_Invalidate_I,0(t0)
+	cache	Index_Writeback_Inv_D,0(t0)
 	bne	t0,t1,_b1518
 	  addiu	t0,t0,32
 	sync
@@ -2021,12 +2070,12 @@ _b1aa0:
 	lui	at,0x4d53
 	ori	at,at,0x504c
 	sub	a0,a0,at
-	bnez	a0,_b0efc
+	bnez	a0,usb_boot
 	  nop
 	b	_b1d8c
 	  nop
 
-_b1ac8:
+msc0_boot:
 	lui	t1,0xc
 	sw	t1,68(sp)
 	sw	t1,120(sp)
