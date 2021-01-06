@@ -181,11 +181,11 @@ ssi0_disable:
 	jr	ra
 	  nop
 
-spi0_wait_rfifo_empty:
+ssi0_wait_for_data:
 	li	t0,0xffff
 
 _b01c8:
-	/* Wait for the SPI0 receive FIFO to be empty */
+	/* Wait for the SPI0 receive FIFO to have data */
 	beqz	t0,_b01e0
 	  addi	t0,t0,-1
 	lw	t1,12(k1)
@@ -248,7 +248,7 @@ _b028c:
 	beqz	t1,_b028c
 	  nop
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	v1,0(k1)
 	li	t0,4
@@ -269,47 +269,47 @@ _b02d0:
 
 _b02e0:
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 
 _b02f0:
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 
 _b0300:
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,85
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,170
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,85
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,170
 	bne	t1,t0,_b02d0
 	  nop
 	sb	zero,0(k1)
-	jal	spi0_wait_rfifo_empty
+	jal	ssi0_wait_for_data
 	  nop
 	lbu	t2,0(k1)
 	jal	ssi0_disable
