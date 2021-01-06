@@ -200,27 +200,43 @@ _b01e0:
 spi0_boot_cs0:
 	lui	k1,0xb004
 	ori	k1,k1,0x3000
+
+	/* Set PA18, PA19, PA21 to function 2 */
 	lui	t1,0x2c
 	sw	t1,68(sp)
 	sw	t1,116(sp)
 	sw	t1,88(sp)
+
+	/* Set PA20 to function 1 */
 	lui	t1,0x10
 	sw	t1,68(sp)
 	sw	t1,120(sp)
 	sw	t1,84(sp)
+
+	/* Set SSI0 clock divider to 11 (500 kHz) */
 	li	t1,11
 	sw	t1,24(k1)
+
+	/* Set SSICR1 */
 	lui	t1,0x3c00
 	ori	t1,t1,0x60
 	sw	t1,8(k1)
+
+	/* Enable SSI0, flush FIFOs */
 	li	t1,0x8086
 	sw	t1,4(k1)
+
+	/* Disable pull-over resistors for ssi0-a (PA18->PA21) */
 	lui	t1,0x3c
 	sw	t1,52(sp)
+
+	/* Set SSICR1.UNFIN bit */
 	lw	t1,8(k1)
 	lui	t0,0x80
 	or	t0,t0,t1
 	sw	t0,8(k1)
+
+	/* Write 5 bytes to the transmit FIFO */
 	li	t1,3
 	sb	t1,0(k1)
 	sb	zero,0(k1)
@@ -229,84 +245,98 @@ spi0_boot_cs0:
 	sb	zero,0(k1)
 	li	a3,0xffff
 
-_b0260:
-	beqz	a3,_b02d0
+ssi0_tx_rx_check_loop:
+	/* If timeout -> ssi0_abort */
+	beqz	a3,ssi0_abort
 	  addi	a3,a3,-1
+
+	/* Read SSISR.RFIFO_NUM */
 	lw	t1,12(k1)
 	srl	t1,t1,0x8
 	andi	t1,t1,0xff
+
+	/* Loop until we get the 5 bytes in the receive FIFO */
 	li	t0,5
-	bne	t1,t0,_b0260
+	bne	t1,t0,ssi0_tx_rx_check_loop
 	  nop
+
+	/* Test succeeded - flush FIFOs */
 	lw	t1,4(k1)
 	ori	t1,t1,0x6
 	sw	t1,4(k1)
 
-_b028c:
+	/* Wait until the FIFOs were effectively flushed */
+spi0_wait_rfifo_empty:
 	lw	t1,12(k1)
 	andi	t1,t1,0x10
-	beqz	t1,_b028c
+	beqz	t1,spi0_wait_rfifo_empty
 	  nop
+
+	/* Write another byte to the fifo, and wait for the response */
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
+
+	/* First byte of the response gives us the response size */
 	lbu	v1,0(k1)
 	li	t0,4
-	beq	v1,t0,_b02e0
+	beq	v1,t0,ssi0_response_4bytes
 	  nop
 	li	t0,3
-	beq	v1,t0,_b02f0
+	beq	v1,t0,ssi0_response_3bytes
 	  nop
 	li	t0,2
-	beq	v1,t0,_b0300
+	beq	v1,t0,ssi0_response_2bytes
 	  nop
 
-_b02d0:
+ssi0_abort:
 	jal	ssi0_disable
 	  nop
 	b	usb_boot
 	  nop
 
-_b02e0:
+ssi0_response_4bytes:
+	/* Read dummy byte */
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 
-_b02f0:
+ssi0_response_3bytes:
+	/* Read dummy byte */
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 
-_b0300:
+ssi0_response_2bytes:
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,85
-	bne	t1,t0,_b02d0
+	bne	t1,t0,ssi0_abort
 	  nop
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,170
-	bne	t1,t0,_b02d0
+	bne	t1,t0,ssi0_abort
 	  nop
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,85
-	bne	t1,t0,_b02d0
+	bne	t1,t0,ssi0_abort
 	  nop
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
 	  nop
 	lbu	t1,0(k1)
 	li	t0,170
-	bne	t1,t0,_b02d0
+	bne	t1,t0,ssi0_abort
 	  nop
 	sb	zero,0(k1)
 	jal	ssi0_wait_for_data
@@ -1594,6 +1624,7 @@ _b1454:
 	  nop
 
 _b14bc:
+	/* la	s4,_b1914 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6420
 	li	s5,8
@@ -1699,6 +1730,7 @@ _b15cc:
 	  nop
 
 _b1610:
+	/* la	s4,_b1870 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6256
 	li	s6,1
@@ -1710,6 +1742,7 @@ _b1610:
 	  nop
 
 _b1634:
+	/* la	s4,_b1884 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6276
 	li	s6,1
@@ -1721,12 +1754,14 @@ _b1634:
 	  nop
 
 _b1658:
+	/* la	s4,_b18b0 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6320
 	lbu	t0,1(k1)
 	andi	t0,t0,0x10
 	beqz	t0,_b1678
 	  nop
+	/* la	s4,_b1890 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6288
 
@@ -1748,18 +1783,21 @@ _b1694:
 	  addi	t0,t1,-2
 	beqz	t0,_b16d4
 	  nop
+	/* la	s4,_b18d0 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6352
 	b	_b16e4
 	  li	s5,4
 
 _b16c4:
+	/* la	s4,_b18d4 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6356
 	b	_b16e4
 	  li	s5,16
 
 _b16d4:
+	/* la	s4,_b18e4 */
 	lui	s4,0xbfc0
 	addiu	s4,s4,6372
 	b	_b16e4
@@ -1904,14 +1942,17 @@ _b1868:
 	b	_b1348
 	  nop
 
+_b1870:
 	.word	0x02000112
 	.word	0x40000000
 	.word	0x4760601a
 	.word	0x02010100
 	.word	0x00000100
+_b1884:
 	.word	0x0200060a
 	.word	0x40000000
 	.word	0x00000001
+_b1890:
 	.word	0x00200209
 	.word	0xc0000101
 	.word	0x00040901
@@ -1920,6 +1961,7 @@ _b1868:
 	.word	0x02000201
 	.word	0x81050700
 	.word	0x00020002
+_b18b0:
 	.word	0x00200209
 	.word	0xc0000101
 	.word	0x00040901
@@ -1928,11 +1970,14 @@ _b1868:
 	.word	0x00400201
 	.word	0x81050700
 	.word	0x00004002
+_b18d0:
 	.word	0x04090304
+_b18d4:
 	.word	0x00490310
 	.word	0x0067006e
 	.word	0x006e0065
 	.word	0x00630069
+_b18e4:
 	.word	0x004a032e
 	.word	0x0034005a
 	.word	0x00360037
@@ -1945,6 +1990,7 @@ _b1868:
 	.word	0x00760065
 	.word	0x00630069
 	.word	0x00000065
+_b1914:
 	.word	0x37345a4a
 	.word	0x31563036
 
@@ -1952,22 +1998,23 @@ _b191c:
 	li	t0,1
 	sh	t0,0(s4)
 
-_b1924:
+msc0_wait_for_clk_en:
+	/* Check MSC0's MSC_STAT.CLK_EN */
 	lui	t3,0xb002
 	ori	t3,t3,0x1004
 	lw	t4,0(t3)
 	andi	t4,t4,0x100
-	beqz	t4,_b1958
+	beqz	t4,msc0_clk_enabled
 	  nop
 	nop
 	nop
 	nop
 	nop
 	nop
-	b	_b1924
+	b	msc0_wait_for_clk_en
 	  nop
 
-_b1958:
+msc0_clk_enabled:
 	sb	s5,44(s4)
 	sw	s6,48(s4)
 	sw	s7,12(s4)
@@ -2088,15 +2135,18 @@ msc0_boot:
 	sw	t1,52(sp)
 	lui	s4,0xb002
 	ori	s4,s4,0x1000
+
+	/* Prepare for clock start (set MSC_CTRL0.START_OP) */
 	li	t2,8
 	sh	t2,0(s4)
 
-_b1b00:
+msc0_wait_for_auto_cmd_done:
+	/* Wait for MSC_STAT0.AUTO_CMD_DONE to be cleared */
 	lui	t3,0xb002
 	ori	t3,t3,0x1004
 	lw	t4,0(t3)
 	andi	t4,t4,0x8000
-	bnez	t4,_b1b00
+	bnez	t4,msc0_wait_for_auto_cmd_done
 	  nop
 	li	t2,0xffff
 	sw	t2,36(s4)
