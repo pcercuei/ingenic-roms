@@ -2,7 +2,7 @@ CC := mipsel-linux-gcc
 OBJCOPY := mipsel-linux-objcopy
 OBJDUMP := mipsel-linux-objdump
 
-TARGETS := jz4760.rom
+TARGETS := jz4760.rom jz4770.rom
 
 LDFLAGS := -nostartfiles -nostdlib -mno-abicalls -EL -T linkscript.ld
 
@@ -11,7 +11,7 @@ LDFLAGS := -nostartfiles -nostdlib -mno-abicalls -EL -T linkscript.ld
 all: $(TARGETS)
 
 clean:
-	-rm -f $(TARGETS) $(basename $(TARGETS)).elf $(basename $(TARGETS)).disas.txt
+	-rm -f $(TARGETS) $(foreach target,$(TARGETS),$(basename $(target)).elf $(basename $(target).disas.txt))
 
 %.o: %.S
 	$(CC) $(ASFLAGS) $< -c -o $@
@@ -21,7 +21,7 @@ clean:
 
 %.rom: %.elf
 	$(OBJCOPY) -O binary --remove-section=.reginfo --remove-section=.MIPS.abiflags $< $@
-	md5sum -c $(@).md5
+	grep $@ checksums.md5 |md5sum -c -
 
 %.disas.txt: %.rom
 	$(OBJDUMP) -m mips -b binary --adjust-vma=0x1fc00000 -D $< > $@
