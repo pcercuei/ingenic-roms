@@ -1257,14 +1257,22 @@ usb_boot:
 	ori	t0,t0,0xffff
 	sw	t0,0(t1)
 	lui	t1,0xb000
+#ifdef JZ4760B
+	ori	t1,t1,0x20e4
+#else
 	ori	t1,t1,0x20e8
+#endif
 	sw	zero,0(t1)
 	lui	t1,0xb000
 	ori	t1,t1,0x2014
 	li	t0,0x8001
 	sh	t0,0(t1)
 	lui	t1,0xb000
+#ifdef JZ4760B
+	ori	t1,t1,0x20e4
+#else
 	ori	t1,t1,0x20e8
+#endif
 
 _b0fe0:
 	lw	t0,0(t1)
@@ -1280,13 +1288,21 @@ _b0fe0:
 	bltz	t0,_b1108
 	  nop
 	lui	t1,0xb000
+#ifdef JZ4760B
+	ori	t1,t1,0x20e4
+#else
 	ori	t1,t1,0x20e8
+#endif
 	sw	zero,0(t1)
 	lui	t1,0xb000
 	ori	t1,t1,0x2048
 	sh	zero,0(t1)
 	lui	s1,0xb000
+#ifdef JZ4760B
+	ori	s1,s1,0x20e4
+#else
 	ori	s1,s1,0x20e8
+#endif
 	lh	t0,0(t1)
 
 _b1034:
@@ -1508,7 +1524,11 @@ _b12bc:
 	ori	t0,t0,0xffff
 	sw	t0,0(t1)
 	lui	t1,0xb000
+#ifdef JZ4760B
+	ori	t1,t1,0x20e4
+#else
 	ori	t1,t1,0x20e8
+#endif
 	sw	zero,0(t1)
 	lui	t1,0xb000
 	ori	t1,t1,0x2014
@@ -1520,7 +1540,11 @@ _b1348:
 	bnez	t5,_b138c
 	  nop
 	lui	t1,0xb000
+#ifdef JZ4760B
+	ori	t1,t1,0x20e4
+#else
 	ori	t1,t1,0x20e8
+#endif
 	lw	t0,0(t1)
 	li	t1,9766
 	.word	0x71234802
@@ -2243,7 +2267,11 @@ _b1c20:
 	li	s5,6
 	lui	s6,0x3b7
 	ori	s6,s6,0x1
+#ifdef JZ4760B
+	li	s7,65
+#else
 	li	s7,1
+#endif
 	li	t8,1
 	jal	_b191c
 	  nop
@@ -2325,4 +2353,8 @@ _b1d8c:
 
 .data
 .section .data.1ffc
+#ifdef JZ4760B
+	.word	0x9be0
+#else
 	.word	0xd49d
+#endif

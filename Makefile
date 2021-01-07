@@ -2,7 +2,7 @@ CC := mipsel-linux-gcc
 OBJCOPY := mipsel-linux-objcopy
 OBJDUMP := mipsel-linux-objdump
 
-TARGETS := jz4760.rom jz4770.rom
+TARGETS := jz4760.rom jz4760b.rom jz4770.rom
 
 LDFLAGS := -nostartfiles -nostdlib -mno-abicalls -EL -T linkscript.ld
 
@@ -12,6 +12,9 @@ all: $(TARGETS)
 
 clean:
 	-rm -f $(TARGETS) $(foreach ext,o elf disas.txt,$(foreach target,$(TARGETS),$(basename $(target)).$(ext)))
+
+jz4760b.o: jz4760.S
+	$(CC) $(ASFLAGS) -DJZ4760B $< -c -o $@
 
 %.o: %.S
 	$(CC) $(ASFLAGS) $< -c -o $@
