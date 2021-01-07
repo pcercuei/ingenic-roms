@@ -11,7 +11,7 @@ LDFLAGS := -nostartfiles -nostdlib -mno-abicalls -EL -T linkscript.ld
 all: $(TARGETS)
 
 clean:
-	-rm -f $(TARGETS) $(foreach target,$(TARGETS),$(basename $(target)).elf $(basename $(target).disas.txt))
+	-rm -f $(TARGETS) $(foreach ext,o elf disas.txt,$(foreach target,$(TARGETS),$(basename $(target)).$(ext)))
 
 %.o: %.S
 	$(CC) $(ASFLAGS) $< -c -o $@

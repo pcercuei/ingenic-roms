@@ -1,3 +1,4 @@
 *.rom
 *.elf
+*.o
 *.disas.txt
