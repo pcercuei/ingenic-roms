@@ -2,7 +2,7 @@ CC := mipsel-linux-gcc
 OBJCOPY := mipsel-linux-objcopy
 OBJDUMP := mipsel-linux-objdump
 
-TARGETS := jz4760.rom jz4760b.rom jz4770.rom
+TARGETS := jz4725b.rom jz4760.rom jz4760b.rom jz4770.rom
 
 LDFLAGS := -nostartfiles -nostdlib -mno-abicalls -EL -T linkscript.ld
 
